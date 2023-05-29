@@ -17,6 +17,7 @@
 
 package com.comphenix.protocol.injector;
 
+import com.comphenix.protocol.ProtocolLib;
 import com.comphenix.protocol.reflect.FieldAccessException;
 import com.comphenix.protocol.reflect.FuzzyReflection;
 import com.comphenix.protocol.reflect.accessors.Accessors;
@@ -24,11 +25,10 @@ import com.comphenix.protocol.reflect.accessors.FieldAccessor;
 import com.comphenix.protocol.reflect.accessors.MethodAccessor;
 import com.comphenix.protocol.reflect.fuzzy.FuzzyFieldContract;
 import com.comphenix.protocol.reflect.fuzzy.FuzzyMethodContract;
-import com.comphenix.protocol.utility.MinecraftFields;
-import com.comphenix.protocol.utility.MinecraftReflection;
-import com.comphenix.protocol.utility.MinecraftVersion;
+import com.comphenix.protocol.utility.*;
 import com.comphenix.protocol.wrappers.WrappedIntHashMap;
 
+import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -38,6 +38,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang.Validate;
 import org.bukkit.World;
@@ -102,11 +105,43 @@ class EntityUtilities {
                 this.getEntity = Accessors.getMethodAccessor(entityGetter);
             }
 
-            Object entity = this.getEntity.invoke(level, id);
-            return (Entity) MinecraftReflection.getBukkitEntity(entity);
+            // Yes, this isn't pretty
+            AtomicReference<Object> entityRef = new AtomicReference<>();
+
+            // Introducing a beautiful mess of code for folia support...
+            if (Util.isUsingFolia()) {
+                // Yes I did it, don't ask
+                final AtomicBoolean lock = new AtomicBoolean(true);
+
+                SchedulerUtil.execute(ProtocolLib.getInstance(), () -> {
+                    entityRef.set(this.getEntity.invoke(level, id));
+                    // Let's unlock the thread that's waiting
+                    lock.set(false);
+                    synchronized (lock) {
+                        lock.notifyAll();
+                    }
+                });
+
+                // This is safe according to someone, somewhere, probably
+                synchronized (lock) {
+                    while (lock.get()) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    }
+                }
+
+            } else {
+                entityRef.set(this.getEntity.invoke(level, id));
+            }
+
+            return (Entity) MinecraftReflection.getBukkitEntity(entityRef.get());
         }
 
-        // old tracker - now the pain begins
+        // old tracker
         Object trackerEntry = this.getEntityTrackerEntry(world, id);
         if (trackerEntry == null) {
             // not tracked

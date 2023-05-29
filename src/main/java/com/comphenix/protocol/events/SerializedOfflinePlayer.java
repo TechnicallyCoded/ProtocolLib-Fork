@@ -104,10 +104,22 @@ class SerializedOfflinePlayer implements OfflinePlayer, Serializable {
         this.online = offline.isOnline();
         this.whitelisted = offline.isWhitelisted();
 
-        // TODO needs to be reflectively obtained
+        // Need to use reflection to get the last login and last seen time
         if (Util.isUsingFolia()) {
-            // this.lastSeen = offline.getLastSeen();
-            // this.lastLogin = offline.getLastLogin();
+            try {
+                Class<? extends OfflinePlayer> offlineClass = offline.getClass();
+
+                Method getLastSeen = offlineClass.getDeclaredMethod("getLastSeen");
+                Object lastSeenObj = getLastSeen.invoke(offline);
+                this.lastSeen = (long) lastSeenObj;
+
+                Method getLastLogin = offlineClass.getDeclaredMethod("getLastLogin");
+                Object lastLoginObj = getLastLogin.invoke(offline);
+                this.lastLogin = (long) lastLoginObj;
+
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+                e.printStackTrace();
+            }
         }
     }
 

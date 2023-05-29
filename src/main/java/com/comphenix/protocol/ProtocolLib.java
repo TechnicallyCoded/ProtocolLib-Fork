@@ -88,6 +88,7 @@ public class ProtocolLib extends JavaPlugin {
     private static final String PERMISSION_INFO = "protocol.info";
 
     // these fields are only existing once, we can make them static
+    private static ProtocolLib instance;
     private static Logger logger;
     private static ProtocolConfig config;
 
@@ -115,6 +116,9 @@ public class ProtocolLib extends JavaPlugin {
 
     @Override
     public void onLoad() {
+        // self
+        instance = this;
+
         // Logging
         logger = this.getLogger();
         ProtocolLogger.init(this);
@@ -607,5 +611,9 @@ public class ProtocolLib extends JavaPlugin {
         PACKET,
         PROTOCOL,
         LOGGING
+    }
+
+    public static ProtocolLib getInstance() {
+        return instance;
     }
 }
